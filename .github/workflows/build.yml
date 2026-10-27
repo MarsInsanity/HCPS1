@@ -75,9 +75,10 @@ jobs:
           "$cc" $flags -std=c99 -O2 tests/test_video.c src/video.c -o build/mips-video
           "$cc" $flags -O2 -Iupstream/pcsx_rearmed/deps/libretro-common/include tests/smoke.c -ldl -lrt -o build/hcps1-bench
           result=0
-          timeout 120 qemu-mipsel -strace -L "$SYSROOT" build/mips-memory || result=1
+          timeout 120 qemu-mipsel -L "$SYSROOT" build/mips-memory || result=1
           timeout 120 qemu-mipsel -L "$SYSROOT" build/mips-video || result=1
           HCPS1_FORCE_TMPFILE=1 timeout 240 qemu-mipsel -L "$SYSROOT" build/hcps1-bench "$PWD/dist/sf3000/hcps1_libretro.so" "$PWD/build/test.exe" || result=1
+          HCPS1_FORCE_TMPFILE=1 timeout 240 qemu-mipsel -L "$SYSROOT" build/hcps1-bench "$PWD/dist/sf3000/hcps1_libretro.so" "$PWD/build/test.exe" --interpreter || result=1
           test "$result" -eq 0
           cp build/hcps1-bench dist/sf3000/
           cp build/test.exe dist/sf3000/hcps1-test.exe
