@@ -17,6 +17,7 @@ int main(void)
     unsigned char *wanted = (void *)(base + HCPS1_RAM_SIZE + page);
     unsigned char *guard = mmap(wanted, page, PROT_READ | PROT_WRITE,
                                MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    fprintf(stderr, "guard wanted=%p actual=%p page=%ld\n", wanted, guard, page);
     assert(guard == wanted);
     memset(guard, 0x5a, page);
     assert(hcps1_map_at(&m, base, 8u << 20, 1) == -EADDRINUSE);

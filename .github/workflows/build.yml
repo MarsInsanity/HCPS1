@@ -48,6 +48,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/hcps1-sdk"
           curl --fail --location --retry 3 --output "$RUNNER_TEMP/sdk.tar.gz" https://github.com/game-de-it/sf3000/releases/download/sf3000_toolchain_v0.1/mipsel-buildroot-linux-gnu_sdk-buildroot.tar.gz
           tar -xzf "$RUNNER_TEMP/sdk.tar.gz" -C "$RUNNER_TEMP/hcps1-sdk"
+      - name: Save downloaded SDK before tests
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/hcps1-sdk
+          key: sf3000-sdk-v0.1-202966420-ubuntu2204
       - name: Locate SDK
         run: |
           sdk="$RUNNER_TEMP/hcps1-sdk/mipsel-buildroot-linux-gnu_sdk-buildroot"
@@ -68,9 +74,11 @@ jobs:
           "$cc" $flags -std=c99 -O2 tests/test_memory.c src/memory.c -o build/mips-memory
           "$cc" $flags -std=c99 -O2 tests/test_video.c src/video.c -o build/mips-video
           "$cc" $flags -O2 -Iupstream/pcsx_rearmed/deps/libretro-common/include tests/smoke.c -ldl -lrt -o build/hcps1-bench
-          timeout 120 qemu-mipsel -L "$SYSROOT" build/mips-memory
-          timeout 120 qemu-mipsel -L "$SYSROOT" build/mips-video
-          HCPS1_FORCE_TMPFILE=1 timeout 240 qemu-mipsel -L "$SYSROOT" build/hcps1-bench "$PWD/dist/sf3000/hcps1_libretro.so" "$PWD/build/test.exe"
+          result=0
+          timeout 120 qemu-mipsel -strace -L "$SYSROOT" build/mips-memory || result=1
+          timeout 120 qemu-mipsel -L "$SYSROOT" build/mips-video || result=1
+          HCPS1_FORCE_TMPFILE=1 timeout 240 qemu-mipsel -L "$SYSROOT" build/hcps1-bench "$PWD/dist/sf3000/hcps1_libretro.so" "$PWD/build/test.exe" || result=1
+          test "$result" -eq 0
           cp build/hcps1-bench dist/sf3000/
           cp build/test.exe dist/sf3000/hcps1-test.exe
       - uses: actions/upload-artifact@v4

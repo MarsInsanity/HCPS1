@@ -85,7 +85,7 @@ int hcps1_map_at(struct hcps1_mapping *m, uintptr_t base, size_t code_size,
 {
     int fd, rc = 0;
     unsigned i;
-    void *mirror;
+    void *mirror = NULL;
     long page = sysconf(_SC_PAGESIZE);
     if (m->count) return -EBUSY;
     if (page <= 0 || !base || base % (uintptr_t)page || !code_size ||
