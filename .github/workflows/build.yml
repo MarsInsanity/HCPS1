@@ -1,0 +1,80 @@
+name: Build and test HCPS1
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Unit tests
+        run: python3 scripts/test.py
+      - name: Build native core
+        run: python3 scripts/build.py --target native
+      - name: Libretro guest and savestate tests
+        run: |
+          python3 scripts/make_test_exe.py build/test.exe
+          cc -O2 -Wall -Wextra -Iupstream/pcsx_rearmed/deps/libretro-common/include tests/smoke.c -ldl -o build/smoke
+          timeout 120 build/smoke "$PWD/dist/native/hcps1_libretro.so" "$PWD/build/test.exe"
+          timeout 120 build/smoke "$PWD/dist/native/hcps1_libretro.so" "$PWD/build/test.exe" --interpreter
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hcps1-native-test-build
+          path: dist/native/
+  sf3000:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install QEMU for MIPS execution tests
+        run: sudo apt-get update && sudo apt-get install -y qemu-user
+      - name: Cache original SF3000 SDK
+        id: sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/hcps1-sdk
+          key: sf3000-sdk-v0.1-202966420-ubuntu2204
+      - name: Download original SDK
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/hcps1-sdk"
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/sdk.tar.gz" https://github.com/game-de-it/sf3000/releases/download/sf3000_toolchain_v0.1/mipsel-buildroot-linux-gnu_sdk-buildroot.tar.gz
+          tar -xzf "$RUNNER_TEMP/sdk.tar.gz" -C "$RUNNER_TEMP/hcps1-sdk"
+      - name: Locate SDK
+        run: |
+          sdk="$RUNNER_TEMP/hcps1-sdk/mipsel-buildroot-linux-gnu_sdk-buildroot"
+          echo "SYSROOT=$sdk/mipsel-buildroot-linux-gnu/sysroot" >> "$GITHUB_ENV"
+          echo "CROSS_COMPILE=$sdk/opt/ext-toolchain/bin/mips-mti-linux-gnu-" >> "$GITHUB_ENV"
+      - name: Build SF3000 core
+        run: python3 scripts/build.py --target sf3000
+      - name: Inspect target ABI and dependencies
+        run: |
+          "${CROSS_COMPILE}readelf" -h -A dist/sf3000/hcps1_libretro.so | tee dist/sf3000/elf-report.txt
+          "${CROSS_COMPILE}readelf" -d dist/sf3000/hcps1_libretro.so | tee -a dist/sf3000/elf-report.txt
+          "${CROSS_COMPILE}nm" -D dist/sf3000/hcps1_libretro.so | grep ' T retro_run'
+      - name: Execute target tests under QEMU
+        run: |
+          python3 scripts/make_test_exe.py build/test.exe
+          cc="${CROSS_COMPILE}gcc"
+          flags="-EL -march=mips32r2 -mabi=32 -mhard-float -mfp32 --sysroot=$SYSROOT"
+          "$cc" $flags -std=c99 -O2 tests/test_memory.c src/memory.c -o build/mips-memory
+          "$cc" $flags -std=c99 -O2 tests/test_video.c src/video.c -o build/mips-video
+          "$cc" $flags -O2 -Iupstream/pcsx_rearmed/deps/libretro-common/include tests/smoke.c -ldl -lrt -o build/hcps1-bench
+          timeout 120 qemu-mipsel -L "$SYSROOT" build/mips-memory
+          timeout 120 qemu-mipsel -L "$SYSROOT" build/mips-video
+          HCPS1_FORCE_TMPFILE=1 timeout 240 qemu-mipsel -L "$SYSROOT" build/hcps1-bench "$PWD/dist/sf3000/hcps1_libretro.so" "$PWD/build/test.exe"
+          cp build/hcps1-bench dist/sf3000/
+          cp build/test.exe dist/sf3000/hcps1-test.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hcps1-sf3000
+          path: dist/sf3000/
+          if-no-files-found: error

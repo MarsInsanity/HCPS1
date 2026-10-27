@@ -1,0 +1,14 @@
+{
+  "pcsx_rearmed": {
+    "url": "https://github.com/notaz/pcsx_rearmed",
+    "commit": "8b6c163575e6ce9a0537553e0d4ed4225315955e"
+  },
+  "lightning": {
+    "url": "https://github.com/notaz/gnu_lightning",
+    "commit": "a6bb2b5a7cf36e074e12ccaed32990b437deb784"
+  },
+  "lightrec": {
+    "url": "https://github.com/pcercuei/lightrec",
+    "commit": "853d0c81f33a7498c9f8ea8a42a19fae48132bb6"
+  }
+}
